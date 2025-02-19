@@ -85,7 +85,7 @@ fastify.register(async (fastifyInstance) => {
                     break;
                 case "audio":
                     if (message.audio_event?.audio_base_64) {
-                        // Send audio data to Twilio
+                        console.log("[II] Received audio from ElevenLabs, forwarding to Twilio...");
                         const audioData = {
                             event: "media",
                             streamSid,
@@ -97,11 +97,9 @@ fastify.register(async (fastifyInstance) => {
                     }
                     break;
                 case "interruption":
-                    // Clear Twilio's audio queue
                     connection.send(JSON.stringify({ event: "clear", streamSid }));
                     break;
                 case "ping":
-                    // Respond to ping events from ElevenLabs
                     if (message.ping_event?.event_id) {
                         const pongResponse = {
                             type: "pong",
@@ -118,15 +116,15 @@ fastify.register(async (fastifyInstance) => {
             try {
                 const data = JSON.parse(message);
                 switch (data.event) {
+                    case "connected":
+                        console.log("[Twilio] Connection established, waiting for audio data...");
+                        break;
                     case "start":
-                        // Store Stream SID when stream starts
                         streamSid = data.start.streamSid;
                         console.log(`[Twilio] Stream started with ID: ${streamSid}`);
                         break;
                     case "media":
-                        // Route audio from Twilio to ElevenLabs
                         if (elevenLabsWs.readyState === WebSocket.OPEN) {
-                            // data.media.payload is base64 encoded
                             const audioMessage = {
                                 user_audio_chunk: Buffer.from(
                                     data.media.payload,
@@ -137,7 +135,6 @@ fastify.register(async (fastifyInstance) => {
                         }
                         break;
                     case "stop":
-                        // Close ElevenLabs WebSocket when Twilio stream stops
                         elevenLabsWs.close();
                         break;
                     default:
@@ -148,13 +145,11 @@ fastify.register(async (fastifyInstance) => {
             }
         });
 
-        // Handle close event from Twilio
         connection.on("close", () => {
             elevenLabsWs.close();
             console.log("[Twilio] Client disconnected");
         });
 
-        // Handle errors from Twilio WebSocket
         connection.on("error", (error) => {
             console.error("[Twilio] WebSocket error:", error);
             elevenLabsWs.close();
@@ -162,7 +157,6 @@ fastify.register(async (fastifyInstance) => {
     });
 });
 
-// Start the Fastify server on port 3000 & bind to 0.0.0.0 (Required for Render)
 fastify.listen({ port: PORT, host: "0.0.0.0" }, (err) => {
     if (err) {
         console.error("Error starting server:", err);
