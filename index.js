@@ -78,72 +78,70 @@ fastify.register(async (fastifyInstance) => {
         });
 
         // Function to handle messages from ElevenLabs
-        const handleElevenLabsMessage = (message, connection) => {
-            switch (message.type) {
-                case "conversation_initiation_metadata":
-                    console.info("[II] Received conversation initiation metadata.");
-                    break;
-                case "audio":
-                    if (message.audio_event?.audio_base_64) {
-                        console.log("[II] Received audio from ElevenLabs, forwarding to Twilio...");
-                        const audioData = {
-                            event: "media",
-                            streamSid,
-                            media: {
-                                payload: message.audio_event.audio_base_64,
-                            },
-                        };
-                        connection.send(JSON.stringify(audioData));
-                    }
-                    break;
-                case "interruption":
-                    connection.send(JSON.stringify({ event: "clear", streamSid }));
-                    break;
-                case "ping":
-                    if (message.ping_event?.event_id) {
-                        const pongResponse = {
-                            type: "pong",
-                            event_id: message.ping_event.event_id,
-                        };
-                        elevenLabsWs.send(JSON.stringify(pongResponse));
-                    }
-                    break;
-            }
-        };
+		const handleElevenLabsMessage = (message, connection) => {
+		    switch (message.type) {
+		        case "conversation_initiation_metadata":
+		            console.info("[II] Received conversation initiation metadata.");
+		            break;
+		        case "audio":
+		            console.log("[II] Received AI-generated audio from ElevenLabs!");
+		            if (message.audio_event?.audio_base_64) {
+		                console.log("[II] Forwarding AI-generated audio to Twilio...");
+		                const audioData = {
+		                    event: "media",
+		                    streamSid,
+		                    media: {
+		                        payload: message.audio_event.audio_base_64,
+		                    },
+		                };
+		                connection.send(JSON.stringify(audioData));
+		            } else {
+		                console.error("[II] No audio data received from ElevenLabs!");
+		            }
+		            break;
+		        case "ping":
+		            console.log("[II] Received ping from ElevenLabs.");
+		            break;
+		        default:
+		            console.log(`[II] Unhandled message type: ${message.type}`);
+		    }
+		};
+
 
         // Handle messages from Twilio
-        connection.on("message", async (message) => {
-            try {
-                const data = JSON.parse(message);
-                switch (data.event) {
-                    case "connected":
-                        console.log("[Twilio] Connection established, waiting for audio data...");
-                        break;
-                    case "start":
-                        streamSid = data.start.streamSid;
-                        console.log(`[Twilio] Stream started with ID: ${streamSid}`);
-                        break;
-                    case "media":
-                        if (elevenLabsWs.readyState === WebSocket.OPEN) {
-                            const audioMessage = {
-                                user_audio_chunk: Buffer.from(
-                                    data.media.payload,
-                                    "base64"
-                                ).toString("base64"),
-                            };
-                            elevenLabsWs.send(JSON.stringify(audioMessage));
-                        }
-                        break;
-                    case "stop":
-                        elevenLabsWs.close();
-                        break;
-                    default:
-                        console.log(`[Twilio] Received unhandled event: ${data.event}`);
-                }
-            } catch (error) {
-                console.error("[Twilio] Error processing message:", error);
-            }
-        });
+		connection.on("message", async (message) => {
+		    try {
+		        const data = JSON.parse(message);
+		        switch (data.event) {
+		            case "connected":
+		                console.log("[Twilio] Connection established, waiting for audio data...");
+		                break;
+		            case "start":
+		                streamSid = data.start.streamSid;
+		                console.log(`[Twilio] Stream started with ID: ${streamSid}`);
+		                break;
+		            case "media":
+		                console.log(`[Twilio] Received audio chunk of size: ${data.media.payload.length} bytes`);
+		                if (elevenLabsWs.readyState === WebSocket.OPEN) {
+		                    const audioMessage = {
+		                        user_audio_chunk: Buffer.from(data.media.payload, "base64").toString("base64"),
+		                    };
+		                    elevenLabsWs.send(JSON.stringify(audioMessage));
+		                    console.log("[Twilio] Sent audio chunk to ElevenLabs.");
+		                }
+		                break;
+		            case "stop":
+		                elevenLabsWs.close();
+		                console.log("[Twilio] Stream stopped.");
+		                break;
+		            default:
+		                console.log(`[Twilio] Received unhandled event: ${data.event}`);
+		        }
+		    } catch (error) {
+		        console.error("[Twilio] Error processing message:", error);
+		    }
+		});
+
 
         connection.on("close", () => {
             elevenLabsWs.close();
